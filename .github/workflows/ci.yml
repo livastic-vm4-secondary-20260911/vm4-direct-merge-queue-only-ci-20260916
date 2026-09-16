@@ -1,0 +1,42 @@
+name: VM4 Direct Merge Queue-Only Validation
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  detect-scopes:
+    runs-on: ubuntu-24.04
+    outputs:
+      merge_queue: ${{ fromJSON(steps.scopes.outputs.scopes)['merge-queue'] }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Detect Mergify scopes
+        id: scopes
+        uses: Mergifyio/gha-mergify-ci@v25
+        with:
+          action: scopes
+          mergify_cli_version: 2026.9.16.1
+
+  queue-only-validation:
+    needs: detect-scopes
+    if: ${{ needs.detect-scopes.outputs.merge_queue == 'true' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Controlled queue-only validation canary
+        run: |
+          echo 'VM4_QUEUE_ONLY_VALIDATION_RAN=true'
+          exit 1
+
+  ci-gate:
+    if: ${{ !cancelled() }}
+    needs:
+      - detect-scopes
+      - queue-only-validation
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Aggregate CI status
+        uses: Mergifyio/gha-mergify-ci@v25
+        with:
+          action: wait-jobs
+          jobs: ${{ toJSON(needs) }}
+
